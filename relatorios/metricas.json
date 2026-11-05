@@ -1,0 +1,216 @@
+{
+  "escolhido": "TF-IDF caracteres + SVM",
+  "n_treino": 1600,
+  "n_teste": 400,
+  "n_robustez": 300,
+  "resultados": {
+    "Regras (sem ML)": {
+      "acuracia": 0.87,
+      "f1_macro": 0.8703719333928174,
+      "f1_cv_media": null,
+      "f1_cv_desvio": null,
+      "f1_ocr_ruim": 0.3898519479096197,
+      "relatorio": {
+        "boleto": {
+          "precision": 0.8941176470588236,
+          "recall": 0.95,
+          "f1-score": 0.9212121212121213,
+          "support": 80.0
+        },
+        "comprovante": {
+          "precision": 1.0,
+          "recall": 0.625,
+          "f1-score": 0.7692307692307693,
+          "support": 80.0
+        },
+        "contrato": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "nota_fiscal": {
+          "precision": 1.0,
+          "recall": 0.775,
+          "f1-score": 0.8732394366197183,
+          "support": 80.0
+        },
+        "outros": {
+          "precision": 0.6504065040650406,
+          "recall": 1.0,
+          "f1-score": 0.7881773399014779,
+          "support": 80.0
+        },
+        "accuracy": 0.87,
+        "macro avg": {
+          "precision": 0.9089048302247729,
+          "recall": 0.8699999999999999,
+          "f1-score": 0.8703719333928174,
+          "support": 400.0
+        },
+        "weighted avg": {
+          "precision": 0.9089048302247726,
+          "recall": 0.87,
+          "f1-score": 0.8703719333928173,
+          "support": 400.0
+        }
+      }
+    },
+    "TF-IDF palavras + Regressão Logística": {
+      "acuracia": 1.0,
+      "f1_macro": 1.0,
+      "f1_cv_media": 0.9993749618506989,
+      "f1_cv_desvio": 0.0012500762986022095,
+      "f1_ocr_ruim": 0.9036344202296694,
+      "relatorio": {
+        "boleto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "comprovante": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "contrato": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "nota_fiscal": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "outros": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "accuracy": 1.0,
+        "macro avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 400.0
+        },
+        "weighted avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 400.0
+        }
+      }
+    },
+    "TF-IDF palavras + SVM": {
+      "acuracia": 1.0,
+      "f1_macro": 1.0,
+      "f1_cv_media": 1.0,
+      "f1_cv_desvio": 0.0,
+      "f1_ocr_ruim": 0.9443954115167378,
+      "relatorio": {
+        "boleto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "comprovante": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "contrato": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "nota_fiscal": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "outros": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "accuracy": 1.0,
+        "macro avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 400.0
+        },
+        "weighted avg": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 400.0
+        }
+      }
+    },
+    "TF-IDF caracteres + SVM": {
+      "acuracia": 0.9975,
+      "f1_macro": 0.9974999023399352,
+      "f1_cv_media": 0.9981248855520967,
+      "f1_cv_desvio": 0.0015310245355612368,
+      "f1_ocr_ruim": 0.9542152650297183,
+      "relatorio": {
+        "boleto": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "comprovante": {
+          "precision": 1.0,
+          "recall": 0.9875,
+          "f1-score": 0.9937106918238994,
+          "support": 80.0
+        },
+        "contrato": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "nota_fiscal": {
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1-score": 1.0,
+          "support": 80.0
+        },
+        "outros": {
+          "precision": 0.9876543209876543,
+          "recall": 1.0,
+          "f1-score": 0.9937888198757764,
+          "support": 80.0
+        },
+        "accuracy": 0.9975,
+        "macro avg": {
+          "precision": 0.9975308641975309,
+          "recall": 0.9974999999999999,
+          "f1-score": 0.9974999023399352,
+          "support": 400.0
+        },
+        "weighted avg": {
+          "precision": 0.9975308641975309,
+          "recall": 0.9975,
+          "f1-score": 0.9974999023399351,
+          "support": 400.0
+        }
+      }
+    }
+  }
+}
