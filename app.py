@@ -189,6 +189,76 @@ def pagina_revisao():
                 st.rerun()
 
 
+def tabela_gastos(df: pd.DataFrame) -> pd.DataFrame:
+    """Uma linha por gasto: notas fiscais (o que foi comprado) e comprovantes (o que foi pago)."""
+    linhas = []
+    for _, d in df.iterrows():
+        c = d.campos or {}
+        if d.tipo_final == "nota_fiscal":
+            linhas.append({"#": d.id, "origem": "Nota fiscal", "data": parse_data(c.get("data_emissao")),
+                           "estabelecimento": c.get("emitente_nome") or "—",
+                           "categoria": c.get("categoria_gasto") or "sem categoria",
+                           "valor": parse_valor(c.get("valor_total")) or 0.0})
+        elif d.tipo_final == "comprovante":
+            linhas.append({"#": d.id, "origem": "Comprovante", "data": parse_data(c.get("data")),
+                           "estabelecimento": c.get("recebedor_nome") or "—",
+                           "categoria": "sem categoria", "valor": parse_valor(c.get("valor")) or 0.0})
+    return pd.DataFrame(linhas, columns=["#", "origem", "data", "estabelecimento", "categoria", "valor"])
+
+
+def secao_gastos(df: pd.DataFrame):
+    st.subheader("Gastos")
+    g = tabela_gastos(df)
+    if g.empty:
+        st.write("Ainda sem notas fiscais ou comprovantes.")
+        return
+
+    datas = g.data.dropna()
+    f1, f2, f3, f4 = st.columns([2, 2, 2, 2])
+    periodo = f1.date_input("Período", (datas.min(), datas.max()) if len(datas) else (), format="DD/MM/YYYY")
+    origens = f2.multiselect("Origem", ["Nota fiscal", "Comprovante"], default=["Nota fiscal"],
+                             help="Uma compra paga por PIX pode ter nota e comprovante; somar os dois conta o gasto duas vezes.")
+    categorias = f3.multiselect("Categoria", sorted(g.categoria.unique()), placeholder="Todas")
+    busca = f4.text_input("Estabelecimento", placeholder="Buscar pelo nome")
+
+    filtro = g.origem.isin(origens)
+    if categorias:
+        filtro &= g.categoria.isin(categorias)
+    if busca:
+        filtro &= g.estabelecimento.str.contains(busca, case=False, regex=False)
+    sem_data = 0
+    if isinstance(periodo, (tuple, list)) and len(periodo) == 2:
+        sem_data = int((filtro & g.data.isna()).sum())
+        filtro &= g.data.map(lambda d: pd.notna(d) and periodo[0] <= d <= periodo[1]).astype(bool)
+    f = g[filtro]
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Total gasto", formatar_valor(f.valor.sum()))
+    m2.metric("Compras", len(f))
+    m3.metric("Gasto médio", formatar_valor(f.valor.mean() if len(f) else 0))
+    m4.metric("Maior gasto", formatar_valor(f.valor.max() if len(f) else 0))
+    if sem_data:
+        st.caption(f"{sem_data} gasto(s) sem data legível ficaram de fora do filtro de período.")
+    if f.empty:
+        st.info("Nenhum gasto com esses filtros.")
+        return
+
+    c1, c2 = st.columns(2)
+    with c1:
+        st.markdown("**Por mês**")
+        com_data = f.dropna(subset=["data"])
+        mes = pd.to_datetime(com_data.data).dt.strftime("%Y-%m")
+        st.bar_chart(com_data.valor.groupby(mes).sum())
+    with c2:
+        st.markdown("**Por categoria**")
+        st.bar_chart(f.valor.groupby(f.categoria).sum().sort_values(ascending=False), horizontal=True)
+
+    tabela = f.sort_values("data", ascending=False, na_position="last").assign(
+        data=lambda x: x.data.map(lambda d: f"{d:%d/%m/%Y}" if pd.notna(d) else "—"),
+        valor=lambda x: x.valor.map(formatar_valor))
+    st.dataframe(tabela, hide_index=True, width="stretch")
+
+
 def pagina_painel():
     st.title("Painel")
     df = banco.listar(["salvo", "revisado"])
@@ -220,18 +290,10 @@ def pagina_painel():
         st.info("Envie documentos na página Enviar documento para preencher o painel.")
         return
 
-    c1, c2 = st.columns(2)
-    with c1:
-        st.subheader("Por tipo")
-        st.bar_chart(df.tipo_final.map(nome_tipo).value_counts())
-    with c2:
-        st.subheader("Notas por categoria de gasto")
-        if len(notas):
-            cat = pd.Series([c.get("categoria_gasto") or "sem categoria" for c in notas.campos])
-            val = pd.Series([parse_valor(c.get("valor_total")) or 0 for c in notas.campos])
-            st.bar_chart(val.groupby(cat).sum())
-        else:
-            st.write("Ainda sem notas fiscais.")
+    secao_gastos(df)
+
+    st.subheader("Documentos por tipo")
+    st.bar_chart(df.tipo_final.map(nome_tipo).value_counts())
 
     st.subheader("Documentos")
     tabela = pd.DataFrame({
