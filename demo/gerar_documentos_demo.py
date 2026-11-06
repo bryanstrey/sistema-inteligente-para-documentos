@@ -102,8 +102,12 @@ def nota_fiscal(data_e: date, itens, emitente="Mercado Bom Preço Ltda", cnpj="1
     return pdf(linhas), total
 
 
+def linha_boleto(venc: date, valor: float) -> str:
+    return gerar_linha_digitavel("341", valor, venc, "1091234567812345600123450")
+
+
 def boleto(venc: date, valor: float, valor_impresso: float | None = None, benef="Colégio Horizonte Ltda", cnpj="58.301.927/0001-41"):
-    linha = gerar_linha_digitavel("341", valor, venc, "1091234567812345600123450")
+    linha = linha_boleto(venc, valor)
     vi = valor_impresso if valor_impresso is not None else valor
     linhas = [
         ("Itaú   |  341-7  |  " + linha, "b", 10), ("", "-", 0),
@@ -161,6 +165,20 @@ def comprovante_pix(d: date):
     ])
 
 
+def comprovante_boleto(d: date, venc: date, valor: float):
+    """Comprovante do pagamento do boleto da escola: serve para mostrar a baixa automática."""
+    return pdf([
+        ("Comprovante de pagamento", "c", 14), ("Banco Inter", "c", 10), ("", "-", 0),
+        (f"{d:%d/%m/%Y} às 09:12:44", "n", 11), (f"Valor pago  R$ {br(valor)}", "b", 14),
+        ("Tipo de pagamento: Boleto bancário", "n", 11), ("", "-", 0),
+        ("Código de barras / linha digitável", "b", 11), (linha_boleto(venc, valor), "m", 9), ("", "-", 0),
+        ("Beneficiário", "b", 11), ("Nome: Colégio Horizonte Ltda", "n", 11), ("CNPJ: 58.301.927/0001-41", "n", 11),
+        (f"Data de vencimento: {venc:%d/%m/%Y}", "n", 11), ("", "-", 0),
+        ("Pagador", "b", 11), ("Nome: Ricardo Almeida Souza", "n", 11), ("CPF: 987.654.321-00", "n", 11), ("", "-", 0),
+        ("Autenticação: 7F3A.91C2.0B44.6E18.D5A0", "m", 9),
+    ])
+
+
 def orcamento(d: date):
     return pdf([
         ("ORÇAMENTO Nº 314", "c", 14), ("Marcenaria Pinho Forte Ltda - CNPJ 34.567.890/0001-30", "c", 9), ("", "-", 0),
@@ -203,6 +221,7 @@ def main():
         "08_boleto_foto_escura.jpg": foto(boleto(HOJE + timedelta(days=9), 640.00), angulo=5, brilho=0.5, ruido=35, desfoque=1.1, escala_dpi=105),
         "09_foto_muito_ruim.jpg": foto(boleto(HOJE + timedelta(days=9), 640.00), angulo=4, brilho=0.55, ruido=30, desfoque=1.3, escala_dpi=100),
         "10_fatura_cartao.pdf": fatura_cartao(HOJE + timedelta(days=13)),
+        "11_comprovante_boleto_escola.pdf": comprovante_boleto(HOJE, HOJE + timedelta(days=4), 1280.00),
     }
     for nome, conteudo in arquivos.items():
         (PASTA / nome).write_bytes(conteudo)

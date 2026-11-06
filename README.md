@@ -53,7 +53,8 @@ streamlit run app.py
 | `pipeline/mascaramento.py` | Troca CPF, nomes, e-mail, telefone, CEP e endereço por marcadores antes da API |
 | `pipeline/extrator_llm.py` | Prompt por tipo, saída JSON, Anthropic / Ollama / regex |
 | `pipeline/validacao.py` | CNPJ, linha digitável, chave NF-e, consistência e evidência no texto |
-| `pipeline/banco.py` | SQLite, alertas e exclusão |
+| `pipeline/banco.py` | SQLite, alertas, exclusão e boletos pagos |
+| `pipeline/conciliacao.py` | Liga o comprovante ao boleto que ele pagou (baixa automática ou sugestão) |
 | `pipeline/processar.py` | Orquestra o pipeline e decide entre salvar e mandar para revisão |
 
 ## Divisão sugerida (3 pessoas)

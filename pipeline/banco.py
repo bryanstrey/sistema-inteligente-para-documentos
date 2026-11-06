@@ -31,15 +31,22 @@ CREATE TABLE IF NOT EXISTS documentos (
     texto_ocr TEXT,           -- fica só no banco local; é o que permite reprocessar na revisão
     texto_mascarado TEXT,
     itens_mascarados TEXT,
-    revisado_em TEXT
+    revisado_em TEXT,
+    pago_em TEXT,             -- boletos: data do pagamento (vazio = em aberto)
+    pago_por INTEGER          -- boletos: id do comprovante que deu a baixa (vazio = marcado à mão)
 );
 """
+COLUNAS_NOVAS = {"pago_em": "TEXT", "pago_por": "INTEGER"}  # bancos criados antes da baixa de boletos
 
 
 def conectar() -> sqlite3.Connection:
     con = sqlite3.connect(BANCO, check_same_thread=False)
     con.row_factory = sqlite3.Row
     con.execute(SQL_CRIAR)
+    existentes = {r["name"] for r in con.execute("PRAGMA table_info(documentos)")}
+    for col, tipo in COLUNAS_NOVAS.items():
+        if col not in existentes:
+            con.execute(f"ALTER TABLE documentos ADD COLUMN {col} {tipo}")
     return con
 
 
@@ -64,6 +71,30 @@ def excluir(doc_id: int):
     """Apaga de verdade o documento e o texto (direito de exclusão, LGPD art. 18)."""
     with conectar() as con:
         con.execute("DELETE FROM documentos WHERE id=?", (doc_id,))
+        # sem o comprovante, a baixa que ele deu perde a prova: o boleto volta a ficar em aberto
+        con.execute("UPDATE documentos SET pago_em=NULL, pago_por=NULL WHERE pago_por=?", (doc_id,))
+
+
+def marcar_pago(boleto_id: int, pago_em: date | None = None, comprovante_id: int | None = None):
+    with conectar() as con:
+        con.execute("UPDATE documentos SET pago_em=?, pago_por=? WHERE id=?",
+                    ((pago_em or date.today()).isoformat(), comprovante_id, boleto_id))
+
+
+def desmarcar_pago(boleto_id: int):
+    with conectar() as con:
+        con.execute("UPDATE documentos SET pago_em=NULL, pago_por=NULL WHERE id=?", (boleto_id,))
+
+
+def boleto_pago_por(comprovante_id: int) -> int | None:
+    with conectar() as con:
+        r = con.execute("SELECT id FROM documentos WHERE pago_por=?", (comprovante_id,)).fetchone()
+        return r["id"] if r else None
+
+
+def boletos_em_aberto() -> pd.DataFrame:
+    df = listar(["salvo", "revisado"])
+    return df[(df.tipo_final == "boleto") & df.pago_em.isna()]
 
 
 def atualizar_extracao(doc_id: int, tipo: str, campos: dict, resumo: str, validacoes: list, motor: str, texto_mascarado: str, itens: dict):
@@ -109,7 +140,7 @@ def alertas(hoje: date | None = None) -> list[dict]:
     out = []
     for _, r in df.iterrows():
         c = r["campos"] or {}
-        if r["tipo_final"] == "boleto":
+        if r["tipo_final"] == "boleto" and pd.isna(r["pago_em"]):
             venc = parse_data(c.get("vencimento"))
             if venc:
                 dias = (venc - hoje).days

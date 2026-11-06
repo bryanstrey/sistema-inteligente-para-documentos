@@ -4,6 +4,7 @@ Regra de decisão (o que o ML descobre define o que o LLM procura):
   - confiança do classificador abaixo do limiar  -> NÃO extrai; vai para revisão humana escolher o tipo
   - extração com erro de validação, OCR ruim ou LLM discordando do tipo -> salva como 'revisao'
   - tudo certo -> 'salvo'
+Comprovante salvo tenta dar baixa no boleto que pagou; boleto salvo procura um comprovante que já tinha chegado.
 """
 from __future__ import annotations
 
@@ -13,6 +14,7 @@ from dataclasses import dataclass, field
 import config
 from pipeline import banco
 from pipeline.classificador import Classificacao, classificar
+from pipeline.conciliacao import Candidato, conciliar, conciliar_boleto_novo
 from pipeline.extrator_llm import ResultadoExtracao, extrair
 from pipeline.mascaramento import Mascarador
 from pipeline.ocr import ResultadoOCR, extrair_texto
@@ -31,6 +33,9 @@ class Resultado:
     texto_mascarado: str = ""
     itens_mascarados: dict = field(default_factory=dict)
     duplicado_de: int | None = None
+    boleto_baixado: Candidato | None = None        # comprovante: boleto que ele quitou
+    sugestoes_boleto: list[Candidato] = field(default_factory=list)  # comprovante: boletos que talvez tenha pago
+    pago_por: int | None = None                    # boleto: comprovante que já tinha chegado e o quitou
 
 
 def extrair_e_validar(tipo: str, texto: str, mascarador: Mascarador | None = None):
@@ -79,7 +84,16 @@ def processar(conteudo: bytes, nome_arquivo: str, salvar: bool = True) -> Result
             "motor_llm": ext.motor if ext else "", "texto_ocr": ocr.texto, "texto_mascarado": texto_envio or masc.mascarar(ocr.texto),
             "itens_mascarados": masc.resumo,
         })
+        if status == "salvo" and not duplicado:
+            depois_de_salvar(res)
     return res
+
+
+def depois_de_salvar(res: Resultado):
+    if res.classificacao.tipo == "comprovante":
+        res.boleto_baixado, res.sugestoes_boleto = conciliar(res.id)
+    elif res.classificacao.tipo == "boleto":
+        res.pago_por = conciliar_boleto_novo(res.id)
 
 
 def reextrair(doc_id: int, tipo: str) -> tuple[ResultadoExtracao, list[dict]]:

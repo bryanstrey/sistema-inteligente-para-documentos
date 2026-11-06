@@ -11,6 +11,7 @@ import streamlit as st
 import config
 from config import NOMES_CATEGORIAS, RELATORIOS
 from pipeline import banco
+from pipeline.conciliacao import candidatos, comprovantes_livres, conciliar, conciliar_boleto_novo
 from pipeline.extrator_llm import ESQUEMAS, provedor_ativo
 from pipeline.processar import processar, reextrair
 from pipeline.validacao import formatar_valor, parse_data, parse_valor
@@ -94,6 +95,19 @@ def pagina_enviar():
         st.progress(min(r.classificacao.confianca, 1.0), text=f"Confiança do classificador: {r.classificacao.confianca:.0%}")
         if r.status == "salvo":
             st.success(f"Salvo no banco (documento #{r.id}).")
+            if r.boleto_baixado:
+                bx = r.boleto_baixado
+                st.success(f"Dei baixa no boleto #{bx.boleto_id} de {bx.beneficiario} ({formatar_valor(bx.valor)}): {bx.motivo}.")
+            if r.pago_por:
+                st.success(f"Este boleto já está pago: o comprovante #{r.pago_por} tinha chegado antes.")
+            for cand in r.sugestoes_boleto:
+                venc = f", vence {cand.vencimento:%d/%m/%Y}" if cand.vencimento else ""
+                st.info(f"Pode ser o pagamento do boleto #{cand.boleto_id} de {cand.beneficiario} "
+                        f"({formatar_valor(cand.valor)}{venc}): {cand.motivo}.")
+                if st.button("É esse, dar baixa", key=f"baixa{cand.boleto_id}"):
+                    banco.marcar_pago(cand.boleto_id, parse_data(r.extracao.campos.get("data")), r.id)
+                    r.boleto_baixado, r.sugestoes_boleto = cand, []
+                    st.rerun()
         else:
             if r.classificacao.precisa_revisao:
                 st.warning("Não tenho certeza do tipo, dá uma revisada. Mandei para a fila de revisão.")
@@ -183,6 +197,10 @@ def pagina_revisao():
                     if k.startswith("valor") and novos[k]:
                         novos[k] = parse_valor(novos[k])
                 banco.atualizar_revisao(int(d["id"]), tipo, novos, "revisado")
+                if tipo == "comprovante":
+                    conciliar(int(d["id"]))
+                elif tipo == "boleto":
+                    conciliar_boleto_novo(int(d["id"]))
                 st.rerun()
             if b.button("Descartar", key=f"d{d['id']}"):
                 banco.atualizar_revisao(int(d["id"]), tipo, novos, "descartado")
@@ -190,8 +208,10 @@ def pagina_revisao():
 
 
 def tabela_gastos(df: pd.DataFrame) -> pd.DataFrame:
-    """Uma linha por gasto: notas fiscais (o que foi comprado) e comprovantes (o que foi pago)."""
+    """Uma linha por gasto: notas fiscais (o que foi comprado), boletos pagos e comprovantes (o que foi pago).
+    Comprovante que deu baixa num boleto não entra de novo: o gasto já está no boleto."""
     linhas = []
+    usados = set(df.pago_por.dropna().astype(int))
     for _, d in df.iterrows():
         c = d.campos or {}
         if d.tipo_final == "nota_fiscal":
@@ -199,7 +219,11 @@ def tabela_gastos(df: pd.DataFrame) -> pd.DataFrame:
                            "estabelecimento": c.get("emitente_nome") or "—",
                            "categoria": c.get("categoria_gasto") or "sem categoria",
                            "valor": parse_valor(c.get("valor_total")) or 0.0})
-        elif d.tipo_final == "comprovante":
+        elif d.tipo_final == "boleto" and pd.notna(d.pago_em):
+            linhas.append({"#": d.id, "origem": "Boleto pago", "data": parse_data(d.pago_em),
+                           "estabelecimento": c.get("beneficiario_nome") or "—",
+                           "categoria": "sem categoria", "valor": parse_valor(c.get("valor")) or 0.0})
+        elif d.tipo_final == "comprovante" and d.id not in usados:
             linhas.append({"#": d.id, "origem": "Comprovante", "data": parse_data(c.get("data")),
                            "estabelecimento": c.get("recebedor_nome") or "—",
                            "categoria": "sem categoria", "valor": parse_valor(c.get("valor")) or 0.0})
@@ -216,7 +240,7 @@ def secao_gastos(df: pd.DataFrame):
     datas = g.data.dropna()
     f1, f2, f3, f4 = st.columns([2, 2, 2, 2])
     periodo = f1.date_input("Período", (datas.min(), datas.max()) if len(datas) else (), format="DD/MM/YYYY")
-    origens = f2.multiselect("Origem", ["Nota fiscal", "Comprovante"], default=["Nota fiscal"],
+    origens = f2.multiselect("Origem", ["Nota fiscal", "Boleto pago", "Comprovante"], default=["Nota fiscal", "Boleto pago"],
                              help="Uma compra paga por PIX pode ter nota e comprovante; somar os dois conta o gasto duas vezes.")
     categorias = f3.multiselect("Categoria", sorted(g.categoria.unique()), placeholder="Todas")
     busca = f4.text_input("Estabelecimento", placeholder="Buscar pelo nome")
@@ -259,6 +283,61 @@ def secao_gastos(df: pd.DataFrame):
     st.dataframe(tabela, hide_index=True, width="stretch")
 
 
+def linha_boleto(b, sugestoes: dict[int, list[int]], livres: pd.DataFrame, hoje: date):
+    c = b.campos or {}
+    venc = parse_data(c.get("vencimento"))
+    info, situacao, acao = st.columns([4, 3, 2], vertical_alignment="center")
+    info.markdown(f"**{c.get('beneficiario_nome') or '?'}** · {formatar_valor(parse_valor(c.get('valor')))}  \n"
+                  f"#{b.id} · vence {f'{venc:%d/%m/%Y}' if venc else '—'}")
+    if pd.notna(b.pago_em):
+        origem = f"comprovante #{int(b.pago_por)}" if pd.notna(b.pago_por) else "marcado à mão"
+        situacao.markdown(f":green[**Pago** em {parse_data(b.pago_em):%d/%m/%Y}]  \n{origem}")
+        if acao.button("Desfazer", key=f"desfaz{b.id}"):
+            banco.desmarcar_pago(int(b.id))
+            st.rerun()
+        return
+    sugeridos = sugestoes.get(int(b.id), [])
+    if venc and venc < hoje:
+        situacao.markdown(f":red[**Vencido** há {(hoje - venc).days} dia(s)]")
+    else:
+        situacao.markdown(":orange[**Em aberto**]")
+    if sugeridos:
+        situacao.caption(f"Comprovante #{sugeridos[0]} parece ser o pagamento")
+    with acao.popover("Marcar como pago", width="stretch"):
+        opcoes = [None] + list(livres.id)
+        por_id = livres.set_index("id")
+        def nome(cid):
+            if cid is None:
+                return "sem comprovante"
+            cc = por_id.loc[cid, "campos"] or {}
+            return f"#{cid} · {cc.get('recebedor_nome') or '?'} · {formatar_valor(parse_valor(cc.get('valor')))} · {cc.get('data') or '—'}"
+        comp = st.selectbox("Comprovante", opcoes, index=opcoes.index(sugeridos[0]) if sugeridos else 0,
+                            format_func=nome, key=f"comp{b.id}")
+        data_comp = parse_data((por_id.loc[comp, "campos"] or {}).get("data")) if comp is not None else None
+        quando = st.date_input("Data do pagamento", data_comp or hoje, format="DD/MM/YYYY", key=f"data{b.id}{comp}")
+        if st.button("Confirmar", type="primary", key=f"pago{b.id}"):
+            banco.marcar_pago(int(b.id), quando, None if comp is None else int(comp))
+            st.rerun()
+
+
+def secao_boletos(df: pd.DataFrame, hoje: date):
+    boletos = df[df.tipo_final == "boleto"]
+    if boletos.empty:
+        return
+    st.subheader("Boletos")
+    st.caption("Ao enviar o comprovante, o sistema dá baixa sozinho no boleto que ele pagou. Também dá para marcar à mão.")
+    livres = comprovantes_livres()
+    sugestoes: dict[int, list[int]] = {}
+    for _, cp in livres.iterrows():
+        for cand in candidatos(cp.campos or {}, cp.texto_ocr or ""):
+            sugestoes.setdefault(cand.boleto_id, []).append(int(cp.id))
+    venc = boletos.campos.map(lambda c: parse_data((c or {}).get("vencimento")) or date.max)
+    ordem = boletos.assign(_pago=boletos.pago_em.notna(), _venc=venc).sort_values(["_pago", "_venc"])
+    for _, b in ordem.iterrows():
+        with st.container(border=True):
+            linha_boleto(b, sugestoes, livres, hoje)
+
+
 def pagina_painel():
     st.title("Painel")
     df = banco.listar(["salvo", "revisado"])
@@ -268,8 +347,8 @@ def pagina_painel():
     notas = df[df.tipo_final == "nota_fiscal"]
     gasto_mes = sum(parse_valor(c.get("valor_total")) or 0 for c in notas.campos
                     if (dt := parse_data(c.get("data_emissao"))) and dt.month == hoje.month and dt.year == hoje.year)
-    boletos = df[df.tipo_final == "boleto"]
-    a_pagar = sum(parse_valor(c.get("valor")) or 0 for c in boletos.campos if (v := parse_data(c.get("vencimento"))) and v >= hoje)
+    em_aberto = df[(df.tipo_final == "boleto") & df.pago_em.isna()]
+    a_pagar = sum(parse_valor(c.get("valor")) or 0 for c in em_aberto.campos)
 
     m1, m2, m3, m4 = st.columns(4)
     m1.metric("Documentos organizados", len(df))
@@ -290,6 +369,7 @@ def pagina_painel():
         st.info("Envie documentos na página Enviar documento para preencher o painel.")
         return
 
+    secao_boletos(df, hoje)
     secao_gastos(df)
 
     st.subheader("Documentos por tipo")
