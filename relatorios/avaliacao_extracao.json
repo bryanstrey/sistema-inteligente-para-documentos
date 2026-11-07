@@ -1,0 +1,6 @@
+{
+  "LLM - texto limpo": 0.995,
+  "Regex - texto limpo": 0.83,
+  "LLM - OCR ruim": 0.725,
+  "Regex - OCR ruim": 0.47
+}

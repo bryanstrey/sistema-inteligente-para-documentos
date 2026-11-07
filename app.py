@@ -431,8 +431,17 @@ dá uma segunda opinião sobre o tipo. Na dúvida, vai para revisão humana.
 **Transparência.** Todo resultado mostra a confiança, o texto lido e a resposta do LLM, com aviso de que foi
 gerado por IA.
 
+**Impacto sobre quem usa.** O sistema apoia a decisão, não decide sozinho: ele organiza, alerta e sugere, mas
+a pessoa confere e tem a palavra final (a baixa de um boleto pode ser desfeita no painel). O risco é a pessoa
+confiar demais na automação e parar de olhar os documentos; por isso os casos duvidosos não são salvos em
+silêncio, vão para a fila de revisão. Um alerta que não aparece (boleto lido errado) também é um impacto real:
+o sistema reduz esquecimentos, mas não substitui o controle da própria pessoa.
+
 **Vieses e limitações.** O classificador foi treinado com documentos fictícios gerados por nós; documentos
-reais têm layouts que ele nunca viu. Ele vai pior com manuscrito, foto escura ou torta e formatos fora das 5
+reais têm layouts que ele nunca viu. A base reflete as nossas escolhas: poucos bancos, emissores e modelos de
+nota, nomes e endereços gerados pelo Faker. Documentos de outros bancos, prefeituras ou regiões, ou escritos
+de forma menos padronizada, tendem a ter resultado pior, e quem mais usa esses documentos é quem mais sofre o
+erro. Ele vai pior com manuscrito, foto escura ou torta e formatos fora das 5
 categorias, e pode errar *com confiança alta* (ex.: fatura de cartão). O OCR é o elo mais fraco: se ele lê mal,
 tudo depois sofre. O LLM pode inventar campos; a checagem de evidência reduz, mas não elimina, esse risco.
 """)
